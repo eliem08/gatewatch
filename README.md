@@ -77,14 +77,14 @@ Everything runs **in the browser** (Tesseract.js, no server GPU, no image upload
 
 ## Sample images
 
-`public/samples/` contains 4 synthetic gate-camera captures (1600×1000) with valid ISO 6346 numbers and Moroccan-format plates:
+`public/samples/` contains 4 synthetic gate-camera captures (1400×875 SVG, text as vector paths — renders identically everywhere) with valid ISO 6346 numbers and Moroccan-format plates:
 
 | File | Container | Plate |
 |---|---|---|
-| `sample-1-tclu.jpg` | TCLU 482913-2 | — |
-| `sample-2-msku.jpg` | MSKU 739201-7 | 78452-A-17 |
-| `sample-3-gesu.jpg` | GESU 556720-2 | — |
-| `sample-4-fciu.jpg` | FCIU 908134-3 | 91208-B-45 |
+| `sample-1-tclu.svg` | TCLU 482913-2 | — |
+| `sample-2-msku.svg` | MSKU 739201-7 | 78452-A-17 |
+| `sample-3-gesu.svg` | GESU 556720-2 | — |
+| `sample-4-fciu.svg` | FCIU 908134-3 | 91208-B-45 |
 
 They're renders, not photos — built for OCR reliability so the demo works on first click. The matching appointment slots are pre-seeded in the registry.
 

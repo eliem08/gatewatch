@@ -79,9 +79,13 @@ function getWorker(onProgress?: (p: OcrProgress) => void): Promise<TesseractWork
 export async function recognizeImage(
   source: string,
   onProgress?: (p: OcrProgress) => void,
+  psm: '3' | '6' | '11' = '11',
 ): Promise<OcrResult> {
   const started = performance.now();
   const worker = await getWorker(onProgress);
+  // Page segmentation is per-pass: sparse text (11) for full gate frames,
+  // fully automatic (3) for tight region crops like the plate band.
+  await worker.setParameters({ tessedit_pageseg_mode: psm });
 
   try {
     const { data } = await worker.recognize(source);

@@ -120,7 +120,7 @@ export default function DemoPage() {
           setStatus('Plate not found — scanning lower region…');
           try {
             const cropUrl = cropToDataUrl(img, 0.55, 0.45);
-            const res2 = await recognizeImage(cropUrl, onProg);
+            const res2 = await recognizeImage(cropUrl, onProg, '3');
             if (id !== scanIdRef.current) return;
             fullText = fullText + '\n' + res2.text;
             totalOcrMs += res2.ms;

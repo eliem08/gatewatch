@@ -16,25 +16,25 @@ type Sample = {
 const SAMPLES: Sample[] = [
   {
     id: 'sample-1',
-    src: '/samples/sample-1-tclu.jpg',
+    src: '/samples/sample-1-tclu.svg',
     label: 'Container TCLU 482913-2',
     hint: 'Container only',
   },
   {
     id: 'sample-2',
-    src: '/samples/sample-2-msku.jpg',
+    src: '/samples/sample-2-msku.svg',
     label: 'Truck MSKU 739201-7 · plate 78452-A-17',
     hint: 'Plate + container',
   },
   {
     id: 'sample-3',
-    src: '/samples/sample-3-gesu.jpg',
+    src: '/samples/sample-3-gesu.svg',
     label: 'Container GESU 556720-2',
     hint: 'Container only',
   },
   {
     id: 'sample-4',
-    src: '/samples/sample-4-fciu.jpg',
+    src: '/samples/sample-4-fciu.svg',
     label: 'Truck FCIU 908134-3 · plate 91208-B-45',
     hint: 'Plate + container',
   },
