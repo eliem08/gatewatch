@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0b0f16;
+  --panel: #111826;
+  --panel-deep: #0e141f;
+  --line: #1f2a3d;
+  --amber: #ffb300;
+  --green: #22c55e;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --text: #e8edf5;
+  --muted: #8b98ad;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  ::selection {
+    background-color: var(--amber);
+    color: #0b0f16;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) var(--bg);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border: 2px solid var(--bg);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2c3a52;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: var(--bg);
+  }
+}
+
+/* ---------- Custom utilities ---------- */
+
+.font-display {
+  font-family: var(--font-display), "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-mono2 {
+  font-family: var(--font-mono), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.blueprint-grid {
+  background-color: var(--bg);
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      rgba(31, 42, 61, 0.6) 0px,
+      rgba(31, 42, 61, 0.6) 1px,
+      transparent 1px,
+      transparent 48px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(31, 42, 61, 0.6) 0px,
+      rgba(31, 42, 61, 0.6) 1px,
+      transparent 1px,
+      transparent 48px
+    );
+  background-position: center center;
+}
+
+.hazard-top {
+  border-top: 2px solid var(--amber);
+}
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.stat-num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.corner-ticks::before,
+.corner-ticks::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.corner-ticks::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--amber);
+  border-left: 2px solid var(--amber);
+}
+
+.corner-ticks::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--amber);
+  border-right: 2px solid var(--amber);
+}
