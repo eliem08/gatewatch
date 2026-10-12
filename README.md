@@ -4,7 +4,7 @@
 
 GateWatch is a working demo of an automated gate pipeline, built around the real bottleneck at the **Port of Casablanca**: just **3 terminal gates**, trucks queuing **up to 12 hours**, and throughput collapsed from ~2,800 to ~900 containers/day. Manual plate-and-container checks take minutes per truck. GateWatch turns that check into seconds — no new concrete required.
 
-> **Live demo:** *(production URL goes here after Vercel deploy)*
+> **Live demo:** https://gatewatch-8cj6b60eq-eliem08s-projects.vercel.app
 
 ---
 
