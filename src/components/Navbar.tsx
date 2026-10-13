@@ -4,6 +4,8 @@ const NAV_LINKS = [
   { href: "/demo", label: "Demo" },
   { href: "/batch", label: "Batch" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/benchmark", label: "Benchmark" },
+  { href: "/methodology", label: "Methodology" },
   { href: "/registry", label: "Registry" },
   { href: "/#roi", label: "ROI" },
 ];
