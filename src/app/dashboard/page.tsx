@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { computeStats, bucketByHour, makeId, GateEntry } from '@/lib/gatelog';
+import { computeAccuracy, type ReviewItem } from '@/lib/review';
+import { gateLogToCsv, downloadCsv } from '@/lib/export';
 import { Eyebrow, SectionHeading, Stat, Badge, Card, AmberButton, GhostButton } from '@/components/ui';
 
 const LOG_KEY = 'gatewatch.log.v1';
+const REVIEW_KEY = 'gatewatch.review.v1';
 
 const SAMPLE_PLATES = [
   '78452-A-17',
@@ -77,6 +80,7 @@ function PanelTitle({ children }: { children: React.ReactNode }) {
 
 export default function DashboardPage() {
   const [entries, setEntries] = useState<GateEntry[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -85,6 +89,11 @@ export default function DashboardPage() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setEntries(parsed);
+      }
+      const reviewRaw = window.localStorage.getItem(REVIEW_KEY);
+      if (reviewRaw) {
+        const parsed = JSON.parse(reviewRaw);
+        if (Array.isArray(parsed)) setReviews(parsed);
       }
     } catch {
       /* ignore */
@@ -105,6 +114,40 @@ export default function DashboardPage() {
   const stats = useMemo(() => computeStats(entries), [entries]);
   const buckets = useMemo(() => bucketByHour(entries), [entries]);
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+
+  const pendingReviews = useMemo(() => reviews.filter((r) => r.status === 'pending'), [reviews]);
+  const accuracy = useMemo(
+    () =>
+      computeAccuracy({
+        totalScans: entries.length + pendingReviews.length,
+        reviewItems: reviews,
+      }),
+    [entries.length, pendingReviews.length, reviews],
+  );
+
+  const laneRows = useMemo(() => {
+    const byLane = new Map<number, { count: number; totalMs: number }>();
+    for (const e of entries) {
+      if (e.lane == null) continue;
+      const row = byLane.get(e.lane) ?? { count: 0, totalMs: 0 };
+      row.count += 1;
+      row.totalMs += e.processingMs;
+      byLane.set(e.lane, row);
+    }
+    return [1, 2, 3].map((id) => {
+      const row = byLane.get(id) ?? { count: 0, totalMs: 0 };
+      return {
+        id,
+        count: row.count,
+        avgMs: row.count > 0 ? row.totalMs / row.count : 0,
+      };
+    });
+  }, [entries]);
+
+  function exportCsv() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`gatewatch-gate-log-${stamp}.csv`, gateLogToCsv([...entries].sort((a, b) => a.ts - b.ts)));
+  }
 
   const total = entries.length;
   const matches = entries.filter((e) => e.result === 'match').length;
@@ -261,8 +304,86 @@ export default function DashboardPage() {
           </Card>
         </section>
 
+        <section className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <PanelTitle>Lane throughput</PanelTitle>
+            {laneRows.every((r) => r.count === 0) ? (
+              <p className="text-[#8B98AD] font-mono text-sm py-12 text-center">
+                No batch-lane data yet — run the batch page to fill this in
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {laneRows.map((row) => (
+                  <div key={row.id} className="flex items-center gap-3 font-mono text-sm">
+                    <span className="w-14 text-[#E8EDF5]">Lane {row.id}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded bg-[#0B0F16]">
+                      <div
+                        className="h-full bg-[#FFB300]"
+                        style={{
+                          width: `${Math.round(
+                            (row.count / Math.max(1, ...laneRows.map((r) => r.count))) * 100,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="w-16 text-right text-[#8B98AD]">{row.count} trucks</span>
+                    <span className="w-16 text-right text-[#8B98AD]">
+                      {row.count > 0 ? `${(row.avgMs / 1000).toFixed(1)}s avg` : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <PanelTitle>OCR accuracy — human review</PanelTitle>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <div className="font-mono text-2xl text-[#FFB300]">
+                  {(accuracy.autoAcceptRate * 100).toFixed(0)}%
+                </div>
+                <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-[#8B98AD]">
+                  Auto-accept rate
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-2xl text-[#FFB300]">
+                  {(accuracy.correctionRate * 100).toFixed(0)}%
+                </div>
+                <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-[#8B98AD]">
+                  Correction rate
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-2xl text-[#E8EDF5]">{accuracy.reviewed}</div>
+                <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-[#8B98AD]">
+                  Reviewed reads
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-2xl text-[#E8EDF5]">
+                  {pendingReviews.length} pending
+                </div>
+                <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-[#8B98AD]">
+                  Awaiting an operator
+                </div>
+              </div>
+            </div>
+            {pendingReviews.length > 0 ? (
+              <a
+                href="/batch"
+                className="mt-4 inline-block font-mono text-xs text-[#3B82F6] underline-offset-4 hover:underline"
+              >
+                Open review queue →
+              </a>
+            ) : null}
+          </Card>
+        </section>
+
         <section className="flex flex-wrap gap-3">
           <ActionButton onClick={loadSample}>Load sample shift</ActionButton>
+          <ActionButton onClick={exportCsv}>Export CSV</ActionButton>
           <ActionButton onClick={clearLog} danger>
             Clear log
           </ActionButton>
@@ -288,6 +409,8 @@ export default function DashboardPage() {
                     <th className="px-4 py-3">ISO</th>
                     <th className="px-4 py-3">Result</th>
                     <th className="px-4 py-3">Gate</th>
+                    <th className="px-4 py-3">Lane</th>
+                    <th className="px-4 py-3">Review</th>
                     <th className="px-4 py-3">Time (s)</th>
                   </tr>
                 </thead>
@@ -322,6 +445,16 @@ export default function DashboardPage() {
                         <Badge tone={resultTone(e.result)}>{e.result}</Badge>
                       </td>
                       <td className="px-4 py-3 font-mono">{e.gate}</td>
+                      <td className="px-4 py-3 font-mono">{e.lane ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        {e.reviewed ? (
+                          <Badge tone={e.corrected ? 'warn' : 'ok'}>
+                            {e.corrected ? 'corrected' : 'approved'}
+                          </Badge>
+                        ) : (
+                          <span className="font-mono text-xs text-[#8B98AD]">auto</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 font-mono">{(e.processingMs / 1000).toFixed(1)}</td>
                     </tr>
                   ))}

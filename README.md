@@ -72,8 +72,21 @@ Everything runs **in the browser** (Tesseract.js, no server GPU, no image upload
 
 - **`/`** — Marketing landing: the problem, the ROI math, how it works. This is the sales pitch.
 - **`/demo`** — Guided live demo: pick a sample capture (or upload a truck photo) → watch OCR + preprocessing → review extracted plate/container with ISO 6346 validation → verify against the slot registry → log the crossing.
-- **`/dashboard`** — Operations view: gate log, trucks/hour, avg check time, mismatch rate, hourly throughput chart, outcome donut. "Load sample shift" fills a realistic day.
+- **`/batch`** — Batch mode: drop many gate captures at once. Each image is assigned to one of 3 lanes and scanned in queue order; reads below the operator-set confidence threshold go to the human review queue instead of auto-accepting. Verified results land in the gate log in order.
+- **`/dashboard`** — Operations view: gate log, trucks/hour, avg check time, mismatch rate, hourly throughput chart, outcome donut, per-lane throughput, OCR accuracy panel (auto-accept rate, correction rate), and one-click CSV export of the gate log. "Load sample shift" fills a realistic day.
 - **`/registry`** — Appointment-slot CRUD (plate, container, company, line, gate, time window). Persists in `localStorage`; reset to demo data anytime.
+
+## Batch mode, review queue & lanes
+
+**Batch processing.** Drag-and-drop or browse for many images at once (or "Add all 4 samples"). Items process strictly in queue order with per-image status (`queued → processing → done / failed`) and a progress bar. A failed scan never blocks the queue — the next item starts immediately.
+
+**Human review queue.** Every scan whose OCR confidence falls below the operator-set threshold (default 70%, adjustable) is routed to review instead of auto-accepting. The operator sees the capture, the OCR read, and editable plate/container fields, then approves as-is or saves a correction. Every decision is recorded: the dashboard's accuracy panel reports the auto-accept rate (scans that never needed a human) and the correction rate (reviewed reads the operator actually changed).
+
+**3 lane simulation.** Each batch item is assigned to the least-loaded of 3 lanes (ties → lowest lane number) when processing starts; each lane tracks its own processed count and average scan time, and the dashboard shows per-lane throughput. The lanes share one browser OCR engine in this demo, so scans serialize in queue order — production lanes each run their own reader.
+
+**CSV export.** The dashboard's "Export CSV" button downloads the gate log (`timestamp,image,plate,container,iso_valid,result,gate,lane,processing_ms,reviewed,corrected`), oldest-first, RFC 4180 escaping.
+
+**Moroccan plate coverage.** Beyond the current `NNNNN-L-NN` series, the parser accepts 2-letter series (`78452-AB-17`, used once single letters ran out), WW temporary plates in both orders (`WW-123456`, `123456-WW`), and an optional region suffix using the Latin transliteration codes from export/transit paperwork (`78452-A-17-CAS`, `…-RAB`, `…-FES`, 35 city codes). Only known region codes count as a suffix — any other trailing word is treated as OCR noise.
 
 ## Sample images
 
@@ -93,7 +106,7 @@ They're renders, not photos — built for OCR reliability so the demo works on f
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # vitest — 26 tests
+npm test         # vitest — 53 tests
 npm run build    # production build
 ```
 
@@ -106,23 +119,30 @@ src/
   app/
     page.tsx            # landing (the pitch)
     demo/page.tsx       # guided OCR + verification demo
-    dashboard/page.tsx  # gate log, stats, SVG charts
+    batch/page.tsx      # batch queue, 3 lanes, human review queue, accuracy
+    dashboard/page.tsx  # gate log, stats, lane + accuracy panels, CSV export
     registry/page.tsx   # slot CRUD
-  components/           # Navbar, Footer, UploadZone, StepIndicator, ui primitives
+  components/           # Navbar, Footer, UploadZone, BatchDropzone, StepIndicator, ui primitives
   lib/
     ocr.ts              # Tesseract.js wrapper, preprocessing, region re-scan
     iso6346.ts          # check-digit math, parsing, candidate extraction
-    plates.ts           # Moroccan plate normalization
+    plates.ts           # Moroccan plate normalization (2-letter series, WW, region codes)
     slots.ts            # slot matching (match / mismatch / no-slot / outside-window)
     registry.ts         # seed data + localStorage
     gatelog.ts          # log types + statistics
+    batch.ts            # batch queue (FIFO, per-item status)
+    review.ts           # review queue + accuracy accounting
+    lanes.ts            # 3-lane assignment + per-lane stats
+    export.ts           # gate-log CSV export (RFC 4180)
     preprocess.ts       # pure pixel pipeline (grayscale, contrast, Otsu, upscale)
 ```
 
 ## Honest limitations
 
 - **Demo-grade OCR.** Tesseract.js is real OCR, but accuracy depends on image quality: sharp, well-lit, front-facing text. Rain, night, skewed angles, and dirty plates degrade it — production deployments pair this pipeline with fixed IR-illuminated gate cameras and a text-detection front end (e.g., YOLO-based region detection) before OCR.
-- **Simplified plates.** The demo uses `NNNNN-L-NN` plates; real Moroccan plates include Arabic-script region codes.
+- **Plates: transliteration, not Arabic script.** The parser covers the Latin-script forms (including 2-letter series, WW temporary plates, and Latin region-code suffixes). Real Moroccan plates carry the region code in Arabic script, which this English-model OCR cannot read — a production reader needs an Arabic-script model or a dedicated plate recognizer.
+- **Lanes share one OCR engine.** Batch items serialize through a single in-browser Tesseract worker in queue order; the lane assignment and per-lane stats are real, but the lanes are not truly parallel here. Production lanes each run their own reader.
+- **Review thumbnails are session-bound.** Pending review items whose image was an uploaded file lose their thumbnail after a page reload (browser object URLs don't persist); decided review history and accuracy stats survive. Sample-image reviews keep their thumbnails.
 - **Mock registry.** Slots live in `localStorage`; production syncs with the terminal operating system (TOS).
 - **Estimates, not guarantees.** The 9× figure is arithmetic on 180 s vs 20 s checks, not a measured deployment.
 

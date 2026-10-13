@@ -191,6 +191,22 @@ export default function Page() {
             <StepCard step="04" title="Log">
               Every crossing timestamped into the operations dashboard.
             </StepCard>
+
+            <StepCard step="05" title="Batch">
+              Drop a whole queue of captures — 3 lanes process them in order.
+            </StepCard>
+
+            <StepCard step="06" title="Review">
+              Low-confidence reads go to a human operator, not auto-accept.
+            </StepCard>
+
+            <StepCard step="07" title="Export">
+              Download the gate log as CSV for audits and shift reports.
+            </StepCard>
+
+            <StepCard step="08" title="Plates">
+              Full Moroccan coverage: 2-letter series, WW temporary plates, region codes.
+            </StepCard>
           </div>
         </div>
       </section>
