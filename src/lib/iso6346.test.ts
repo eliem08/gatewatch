@@ -17,6 +17,14 @@ describe('iso6346', () => {
     expect(checkDigitFor('TGHU390511')).toBe(3);
   });
 
+  it('computes the textbook ISO 6346 worked example CSQU305438-3', () => {
+    // C=13, S=30, Q=28, U=32, then digits 3,0,5,4,3,8 with weights
+    // 2^0..2^9: 13 + 60 + 112 + 256 + 48 + 0 + 320 + 512 + 768 + 4096
+    // = 6185; 6185 mod 11 = 3.
+    expect(checkDigitFor('CSQU305438')).toBe(3);
+    expect(parseContainer('CSQU305438-3')).toMatchObject({ valid: true });
+  });
+
   it('normalizes container numbers', () => {
     expect(normalizeContainer('tclu 482913-2')).toBe('TCLU4829132');
   });
