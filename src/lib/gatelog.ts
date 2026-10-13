@@ -14,6 +14,12 @@ export type GateEntry = {
   result: MatchResult['status'];
   gate?: number;
   processingMs: number;
+  /** Batch lane (1–3) that scanned this crossing, when it came from batch mode. */
+  lane?: number | null;
+  /** True when the read passed through the human review queue. */
+  reviewed?: boolean;
+  /** True when the operator corrected at least one field in review. */
+  corrected?: boolean;
 };
 
 /**
