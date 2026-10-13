@@ -22,6 +22,7 @@ import {
   DEFAULT_REVIEW_THRESHOLD,
   type ReviewItem,
 } from '@/lib/review';
+import { correctionToRecords, appendConfusionLog } from '@/lib/confusion';
 import {
   createLanes,
   assignLane,
@@ -339,6 +340,21 @@ export default function BatchPage() {
       const decided = updated.find((r) => r.id === reviewId);
       if (!decided) return;
       persistReviews(updated);
+      // Feed the confusion log: every correction teaches the error analysis
+      // which characters the system confuses.
+      if (decided.status === 'corrected') {
+        const t = togglesRef.current;
+        appendConfusionLog(
+          correctionToRecords({
+            ocrPlate: target.ocrPlate,
+            correctedPlate: decided.plate,
+            ocrContainer: target.ocrContainer,
+            correctedContainer: decided.container,
+            preprocessing: t.contrast || t.threshold || t.upscale ? 'on' : 'off',
+            quality: 'batch',
+          }),
+        );
+      }
       // Verify + log with the final (operator-confirmed) values.
       const batchItem = queue.find((q) => q.id === target.batchId);
       const verifyStatus = logCrossing(

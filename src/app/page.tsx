@@ -207,6 +207,14 @@ export default function Page() {
             <StepCard step="08" title="Plates">
               Full Moroccan coverage: 2-letter series, WW temporary plates, region codes.
             </StepCard>
+
+            <StepCard step="09" title="Benchmark">
+              Labeled test set × degradations, scored with CER / WER / field accuracy. Measured, not claimed.
+            </StepCard>
+
+            <StepCard step="10" title="Methodology">
+              Pipeline, ISO 6346 math, failure modes, and honest limits — the research-grade write-up.
+            </StepCard>
           </div>
         </div>
       </section>
@@ -356,8 +364,10 @@ export default function Page() {
             See it clear a truck.
           </h2>
 
-          <div className="mt-9 flex justify-center">
+          <div className="mt-9 flex flex-wrap justify-center gap-3">
             <AmberButton href="/demo">Open the live demo</AmberButton>
+            <GhostButton href="/benchmark">Run the benchmark</GhostButton>
+            <GhostButton href="/methodology">Read the methodology</GhostButton>
           </div>
         </div>
       </section>
