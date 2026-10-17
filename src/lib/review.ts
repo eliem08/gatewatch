@@ -36,12 +36,19 @@ export const DEFAULT_REVIEW_THRESHOLD = 70;
  * SAFETY: a non-finite confidence (NaN/Infinity — e.g. a corrupt worker
  * payload) ALWAYS needs review. Without this guard `NaN < threshold` is
  * false, which would silently auto-accept the read.
+ *
+ * Phase D hardening: the confidence scale is contractually 0–100
+ * (ConfidenceSchema in contracts.ts). A confidence OUTSIDE that range —
+ * negative, or above 100 — is by definition a corrupt/hostile payload and
+ * fails closed to human review. (Before this fix, a finite confidence of
+ * 101 sailed through to auto-accept.)
  * @param confidence OCR confidence 0–100.
  * @param threshold review threshold (exclusive: exactly at threshold passes).
  * @returns true when the scan must go to the review queue.
  */
 export function needsReview(confidence: number, threshold: number): boolean {
   if (!Number.isFinite(confidence)) return true;
+  if (confidence < 0 || confidence > 100) return true;
   return confidence < threshold;
 }
 

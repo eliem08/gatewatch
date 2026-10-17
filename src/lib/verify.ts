@@ -74,16 +74,26 @@ export function verifyGateEventAgainstAppointment(
   const reasonCodes: string[] = [];
 
   // Low-confidence OCR can never clear automatically, no matter what else
-  // matches — route to a human (also covers NaN via the < comparison,
-  // but callers should validate confidences against the contract first).
+  // matches — route to a human.
+  //
+  // Phase D hardening (defense in depth behind routeScan and the
+  // submission schema): the confidence scale is contractually 0–100, so
+  // a non-finite OR out-of-range confidence is a corrupt/hostile payload
+  // and fails closed here too. Before this fix, a finite confidence of
+  // 101 sailed past the threshold check (`101 < 70` is false) and could
+  // authorize a perfectly matching scan. The OCR wrapper (ocr.ts)
+  // coerces non-finite to 0 but does not clamp >100, so this guard is
+  // reachable from a hostile worker, not just theoretical.
+  const confidenceSane = (c: number): boolean =>
+    Number.isFinite(c) && c >= 0 && c <= 100;
   if (
-    !Number.isFinite(scanned.containerConfidence) ||
+    !confidenceSane(scanned.containerConfidence) ||
     scanned.containerConfidence < AUTH_CONFIDENCE_THRESHOLD
   ) {
     reasonCodes.push(REASON_CODES.LOW_CONTAINER_CONFIDENCE);
   }
   if (
-    !Number.isFinite(scanned.plateConfidence) ||
+    !confidenceSane(scanned.plateConfidence) ||
     scanned.plateConfidence < AUTH_CONFIDENCE_THRESHOLD
   ) {
     reasonCodes.push(REASON_CODES.LOW_PLATE_CONFIDENCE);
