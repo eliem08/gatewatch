@@ -1,5 +1,11 @@
 /**
  * Gate crossing log + statistics (pure functions; storage handled by callers).
+ *
+ * DEMO-ONLY RECORDS. Callers persist entries to the visitor's browser
+ * localStorage (`gatewatch.log.v1`) — a per-browser demo log, not a shared
+ * operational record. No server, no cross-browser visibility, no access
+ * control, no tamper-evidence. Production needs a server-side log with an
+ * audit trail (see the methodology page, "What production needs").
  */
 
 import type { MatchResult } from './slots';

@@ -18,7 +18,7 @@ import {
   createReviewItem,
   applyReviewDecision,
   computeAccuracy,
-  needsReview,
+  routeScan,
   DEFAULT_REVIEW_THRESHOLD,
   type ReviewItem,
 } from '@/lib/review';
@@ -34,6 +34,8 @@ import {
 import BatchDropzone, { type PickedFile } from '@/components/BatchDropzone';
 import { Eyebrow, SectionTitle, Stat, Card, AmberActionButton, GhostActionButton, Badge } from '@/components/ui';
 
+// DEMO-ONLY storage: per-browser localStorage, not a shared operational
+// database (see registry.ts). No server, no access control, no audit trail.
 const LOG_KEY = 'gatewatch.log.v1';
 const REVIEW_KEY = 'gatewatch.review.v1';
 
@@ -240,8 +242,11 @@ export default function BatchPage() {
           const scan = await scanImage(current.url);
           if (token !== runTokenRef.current) break;
           localLanes = markLaneIdle(localLanes, laneId, scan.ms);
-          const needs = needsReview(scan.confidence, thresholdRef.current);
-          if (needs) {
+          // Verdict routing (see routeScan): OCR failure already threw
+          // above and is caught below into the 'failed' path — it never
+          // reaches verification or the gate log.
+          const routing = routeScan({ error: null, confidence: scan.confidence }, thresholdRef.current);
+          if (routing === 'human-review') {
             localQueue = updateBatchItem(localQueue, current.id, {
               status: 'done',
               plate: scan.plate,
@@ -294,6 +299,9 @@ export default function BatchPage() {
             setLanes(localLanes);
           }
         } catch (e) {
+          // routeScan 'scan-failed' path: decode or OCR failure marks the
+          // item failed. Failed items are never verified against the slot
+          // registry and never written to the gate log.
           if (token !== runTokenRef.current) break;
           localLanes = markLaneIdle(localLanes, laneId, 0);
           localQueue = updateBatchItem(localQueue, current.id, {

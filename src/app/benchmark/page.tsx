@@ -110,12 +110,14 @@ export default function BenchmarkPage() {
     <main className="min-h-screen bg-[#0B0F16] text-[#E8EDF5] px-6 py-10">
       <div className="mx-auto max-w-6xl space-y-8">
         <header className="space-y-2">
-          <Eyebrow>EVALUATION — MEASURED ACCURACY</Eyebrow>
+          <Eyebrow>EVALUATION — SYNTHETIC BENCHMARK</Eyebrow>
           <h1 className="font-display text-4xl">Benchmark.</h1>
           <p className="text-[#8B98AD] max-w-2xl">
-            {BENCHMARK_SAMPLES.length} labeled samples × {DEGRADATIONS.length} degradations, scored with
-            CER / WER / field accuracy. No vibes — run it and read the table. Degradations are
-            seeded, so the same run is reproducible.
+            {BENCHMARK_SAMPLES.length} labeled synthetic samples (SVG renders, not real photos) ×{' '}
+            {DEGRADATIONS.length} seeded degradations, scored with CER / WER / field accuracy. No
+            vibes — run it and read the table. These numbers measure robustness to synthetic
+            degradation, not real-world accuracy. Degradations are seeded, so the same run is
+            reproducible.
           </p>
         </header>
 

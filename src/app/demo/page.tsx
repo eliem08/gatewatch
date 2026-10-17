@@ -14,6 +14,7 @@ import { extractContainerCandidates, parseContainer } from '@/lib/iso6346';
 import { extractPlateCandidates } from '@/lib/plates';
 import { lookupOwner } from '@/lib/owners';
 import { matchSlot, type MatchResult } from '@/lib/slots';
+import { DEFAULT_REVIEW_THRESHOLD } from '@/lib/review';
 import { loadSlots } from '@/lib/registry';
 import { makeId, type GateEntry } from '@/lib/gatelog';
 import UploadZone from '@/components/UploadZone';
@@ -21,6 +22,8 @@ import StepIndicator from '@/components/StepIndicator';
 import { Eyebrow, SectionHeading, AmberButton, GhostButton, AmberActionButton, GhostActionButton, SectionTitle, Stat, Card } from '@/components/ui';
 
 const STEPS = ['Choose image', 'Scan', 'Review & verify', 'Done'];
+// DEMO-ONLY storage: per-browser localStorage, not a shared operational
+// database (see registry.ts). No server, no access control, no audit trail.
 const LOG_KEY = 'gatewatch.log.v1';
 
 type SlotView = {
@@ -285,18 +288,22 @@ export default function DemoPage() {
   const resultTone =
     resultStatus === 'match'
       ? { border: 'border-[#22C55E]', text: 'text-[#22C55E]' }
-      : resultStatus === 'no-slot' || resultStatus === 'outside-window'
+      : resultStatus === 'ambiguous'
         ? { border: 'border-[#FFB300]', text: 'text-[#FFB300]' }
-        : { border: 'border-[#EF4444]', text: 'text-[#EF4444]' };
+        : resultStatus === 'no-slot' || resultStatus === 'outside-window'
+          ? { border: 'border-[#FFB300]', text: 'text-[#FFB300]' }
+          : { border: 'border-[#EF4444]', text: 'text-[#EF4444]' };
 
   const resultTitle =
     resultStatus === 'match'
       ? 'SLOT MATCH'
-      : resultStatus === 'no-slot'
-        ? 'NO APPOINTMENT — DIRECT TO HOLDING'
-        : resultStatus === 'outside-window'
-          ? 'OUTSIDE SLOT WINDOW'
-          : 'MISMATCH — HOLD FOR INSPECTION';
+      : resultStatus === 'ambiguous'
+        ? 'AMBIGUOUS RECORDS — OPERATOR REVIEW'
+        : resultStatus === 'no-slot'
+          ? 'NO APPOINTMENT — DIRECT TO HOLDING'
+          : resultStatus === 'outside-window'
+            ? 'OUTSIDE SLOT WINDOW'
+            : 'MISMATCH — HOLD FOR INSPECTION';
 
   const totalPreMs = timings.reduce((a, t) => a + t.ms, 0);
 
@@ -383,6 +390,7 @@ export default function DemoPage() {
                     Original
                   </figcaption>
                   {imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={imageUrl}
                       alt="Original gate capture"
@@ -400,6 +408,7 @@ export default function DemoPage() {
                     Preprocessed
                   </figcaption>
                   {preview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={preview}
                       alt="Preprocessed capture"
@@ -419,11 +428,13 @@ export default function DemoPage() {
                 </figcaption>
                 {showOriginal ? (
                   imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={imageUrl} alt="Original gate capture" className="max-h-72 w-full rounded object-contain" />
                   ) : (
                     <div className="flex h-40 items-center justify-center font-mono text-xs text-[#8B98AD]">no image</div>
                   )
                 ) : preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={preview} alt="Preprocessed capture" className="max-h-72 w-full rounded object-contain" />
                 ) : (
                   <div className="flex h-40 items-center justify-center font-mono text-xs text-[#8B98AD]">processing…</div>
@@ -540,6 +551,18 @@ export default function DemoPage() {
         {phase === 2 && (
           <section className="space-y-6">
             <SectionTitle>Review & verify</SectionTitle>
+
+            {confPct < DEFAULT_REVIEW_THRESHOLD && (
+              <div className="rounded-lg border border-[#FFB300] bg-[#111826] p-4">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-[#FFB300]">
+                  Low confidence — {confPct}% (review threshold {DEFAULT_REVIEW_THRESHOLD}%)
+                </div>
+                <p className="mt-2 text-sm text-[#E8EDF5]">
+                  This read would go to the human review queue in batch mode. Check the image and
+                  correct the fields before verifying the slot.
+                </p>
+              </div>
+            )}
 
             {ensemble && (
               <Card>
@@ -663,6 +686,14 @@ export default function DemoPage() {
 
               {iso && (
                 <p className="mt-3 font-mono text-xs text-[#8B98AD]">
+                  A valid check digit only proves the number is well-formed — not that this
+                  container exists or is yours. Identity is checked against the appointment
+                  registry below, never against the check digit alone.
+                </p>
+              )}
+
+              {iso && (
+                <p className="mt-3 font-mono text-xs text-[#8B98AD]">
                   {owner
                     ? `Owner code ${iso.owner} → ${owner.line} (${owner.kind}). ${owner.note ?? ''}`
                     : `Owner code ${iso.owner} is not in the partial registry — unknown owner, not an error.`}{' '}
@@ -711,6 +742,9 @@ export default function DemoPage() {
                     Gate {slotView.gate ?? '—'} · Window {fmtWindow(slotView.window)}
                   </div>
                   <div className="pt-2 text-sm text-[#22C55E]">Barrier lifts.</div>
+                  <p className="pt-1 font-mono text-[11px] text-[#8B98AD]">
+                    UI-only demo verdict — this demo controls no barrier and authorizes no access.
+                  </p>
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-[#8B98AD]">{verifyResult.detail}</p>
@@ -740,7 +774,7 @@ export default function DemoPage() {
 
         <p className="border-t border-[#1F2A3D] pt-4 text-xs text-[#8B98AD]">
           Demo: OCR accuracy depends on image quality. Production deployments use fixed gate cameras with IR
-          illumination feeding this same pipeline. Measured accuracy on the labeled sample set:{' '}
+          illumination feeding this same pipeline. Measured accuracy on the labeled synthetic sample set:{' '}
           <a href="/benchmark" className="text-[#3B82F6] underline-offset-4 hover:underline">
             run the benchmark →
           </a>

@@ -1,6 +1,15 @@
 /**
  * Mock appointment-slot registry with realistic Casablanca demo data
  * and localStorage persistence.
+ *
+ * DEMO-ONLY STORAGE — NOT AN OPERATIONAL DATABASE. Slots live in the
+ * visitor's own browser localStorage, seeded with hardcoded demo data.
+ * There is no server, no sharing between browsers or lanes, no access
+ * control, and no audit trail: anyone with devtools can read or rewrite
+ * every record. A production deployment must sync the registry from the
+ * terminal operating system with server-side logging (see the methodology
+ * page, "What production needs"). Nothing in this file is security
+ * infrastructure.
  */
 
 import type { Slot } from './slots';

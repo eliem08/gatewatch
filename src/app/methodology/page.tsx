@@ -76,8 +76,8 @@ const FAILURE_MODES = [
     body: 'Hand-painted plates, dealer plates, and foreign plates break the shape assumptions. The plate parser accepts the documented Moroccan formats only; anything else goes to review.',
   },
   {
-    name: 'Arabic-script region codes',
-    body: 'Real Moroccan plates carry the region code in Arabic script. The English Tesseract model cannot read it, so the demo accepts Latin transliterations (CAS, RAB, …) from transit paperwork. A production system needs an Arabic-script model (ara.traineddata) as a second engine.',
+    name: 'Arabic-script series letters',
+    body: 'Real Moroccan plates pair a 1–5 digit serial with an Arabic-script series letter (أ، ب، د، هـ، و، ط، ي allocated so far) and a numeric 1–2 digit prefecture code. The English Tesseract model cannot read the Arabic letter, so the demo accepts the Latin equivalent (the post-2026 dual-script plates print it next to the Arabic letter) and a demo-only Latin region suffix (CAS, RAB, …) from transit paperwork. A production system needs an Arabic-script model (ara.traineddata) as a second engine. See src/lib/plates.ts for the exact supported/not-supported list.',
   },
   {
     name: 'Confusable characters',

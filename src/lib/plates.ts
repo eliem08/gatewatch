@@ -1,23 +1,49 @@
 /**
  * Moroccan truck plate helpers.
  *
- * Supported formats (all normalized to dash-separated, uppercase):
- * - Current series: `NNNNN-L-NN`, e.g. "78452-A-17" (4–6 digits, 1–2 letter
- *   series, 1–3 digit suffix). The series letter ran A–Z, then AA, AB, …
- *   once single letters were exhausted.
- * - Region suffix (optional): `NNNNN-L-NN-XXX`, e.g. "78452-A-17-CAS".
- *   Real Moroccan plates carry the region code in Arabic script; OCR with an
- *   English model cannot read Arabic script, so the demo accepts the Latin
- *   transliteration variants used on export/transit paperwork for the major
- *   registration cities (CAS = Casablanca, RAB = Rabat, FES = Fès, …).
- * - Temporary plates: `WW-NNNNNN` or `NNNNNN-WW` (WW = "wagon / waiting",
- *   the temporary registration series for vehicles awaiting full plates).
+ * REAL-WORLD FORMAT (verified against Wikipedia "Vehicle registration
+ * plates of Morocco" and Hespress, Oct 2026):
+ * - Since 2000, standard plates are `DDDDD | <Arabic series letter> | NN`:
+ *   1–5 digit serial, ONE Arabic series letter (allocated so far: أ ب د ه و
+ *   ط ي), and a 1–2 digit prefecture/province code (1–88). Black on white.
+ * - Since Aug 2026 (Decision No. 640.26), NEW plates add the Latin-letter
+ *   equivalent of the series letter next to the Arabic one
+ *   (model: `MA | 00000 ب 00 B`). Older Arabic-only plates stay valid until
+ *   first transfer of ownership.
+ * - Temporary WW plates: `###### WW` black-on-white stickers, valid 1 month,
+ *   national (no region code).
+ *
+ * SUPPORTED BY THIS PARSER (normalized to dash-separated, uppercase):
+ * - Standard series with a LATIN series letter: `NNNNN-L-NN`, e.g.
+ *   "78452-A-17" (4–6 digits, 1–2 letters, 1–3 digit suffix). This matches
+ *   the Latin equivalent on post-2026 dual-script plates and the Latin
+ *   series used on export/transit paperwork. The parser is deliberately
+ *   permissive on digit counts (4–6 vs. the real 1–5) — over-accepting a
+ *   misread is safer than rejecting a valid plate.
+ * - Optional region suffix: `NNNNN-L-NN-XXX`, e.g. "78452-A-17-CAS".
+ *   DEMO-ONLY convention: real Moroccan plates carry a NUMERIC prefecture
+ *   code (1–88), not Latin city codes. The suffix list below is accepted
+ *   only so demo paperwork-style labels parse; it is not a real format.
+ * - Temporary plates: `WW-NNNNNN` or `NNNNNN-WW` (matches the real
+ *   `###### WW` sticker series).
+ *
+ * NOT SUPPORTED (routed to human review, never guessed):
+ * - Arabic-script series letters (the majority of plates on the road today
+ *   — needs an ara.traineddata OCR engine, see the methodology page).
+ * - The `MA |` country-code prefix of the 2026 unified plate model.
+ * - W18 dealer temp plates (`##### W 18`, red on white).
+ * - CD diplomatic plates (blue, `CD` + number pairs).
+ * - Government plates (6 digits + `M`/`ج`, white on black).
+ * - Trailer plates (`####-##`, white on red).
+ * - Pre-2000 formats.
  */
 
 /**
- * Latin transliteration codes for Moroccan registration cities, used as the
- * optional region suffix on plates. Only these codes are accepted as a
- * suffix — any other trailing word is treated as OCR noise, not a region.
+ * DEMO-ONLY suffix list. Real Moroccan plates use a NUMERIC prefecture code
+ * (1–88), not Latin city codes — these are accepted solely so
+ * paperwork-style demo labels like "78452-A-17-CAS" parse. Only these codes
+ * are accepted as a suffix; any other trailing word is treated as OCR
+ * noise, not a region.
  */
 export const REGION_CODES = [
   'CAS', // Casablanca

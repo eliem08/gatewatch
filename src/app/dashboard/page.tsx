@@ -7,6 +7,8 @@ import { computeAccuracy, type ReviewItem } from '@/lib/review';
 import { gateLogToCsv, downloadCsv } from '@/lib/export';
 import { Eyebrow, SectionHeading, Stat, Badge, Card, AmberButton, GhostButton } from '@/components/ui';
 
+// DEMO-ONLY storage: per-browser localStorage, not a shared operational
+// database (see registry.ts). No server, no access control, no audit trail.
 const LOG_KEY = 'gatewatch.log.v1';
 const REVIEW_KEY = 'gatewatch.review.v1';
 
@@ -41,7 +43,7 @@ function fmtTime(ts: number) {
 
 function resultTone(status: string): 'ok' | 'warn' | 'bad' {
   if (status === 'match') return 'ok';
-  if (status === 'no-slot') return 'warn';
+  if (status === 'no-slot' || status === 'ambiguous') return 'warn';
   return 'bad';
 }
 

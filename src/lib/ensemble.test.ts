@@ -46,4 +46,29 @@ describe('ensemble', () => {
     expect(v.votes).toBe(0);
     expect(v.candidates).toEqual([]);
   });
+
+  it('degraded mode: total engine failure yields empty fields, never a hallucinated read', () => {
+    // All engines threw / produced nothing: the ensemble must abstain with
+    // empty winners and zero agreement — downstream routing (routeScan)
+    // then sends the item to human review or the failed path. It must
+    // never invent a plate or container from nothing.
+    const result = combineEngineReads([]);
+    expect(result.plate.value).toBe('');
+    expect(result.container.value).toBe('');
+    expect(result.agreement).toBe(0);
+    expect(result.perEngine).toEqual([]);
+    expect(result.combinedText).toBe('');
+  });
+
+  it('degraded mode: zero-confidence reads do not outvote real candidates', () => {
+    // A zero-confidence engine that hallucinates a plate must not beat a
+    // confident engine: confidence-weighted voting puts the 0-weight
+    // candidate last even when both engines voted.
+    const result = combineEngineReads([
+      read('6', 'plate 00000-Z-00', 0),
+      read('11', 'plate 78452-A-17', 60),
+    ]);
+    expect(result.plate.value).toBe('78452-A-17');
+    expect(result.agreement).toBeLessThan(1);
+  });
 });

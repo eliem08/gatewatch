@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { validateUploadFile } from '@/lib/uploads';
 
 export type UploadZoneProps = {
   onSelect: (file: File | null, url: string, name: string) => void;
@@ -78,8 +79,9 @@ export default function UploadZone({ onSelect }: UploadZoneProps) {
   const acceptFile = useCallback(
     (file: File | null | undefined) => {
       if (!file) return;
-      if (!file.type.startsWith('image/')) {
-        setError('That file is not an image. Use JPG, PNG or WebP.');
+      const check = validateUploadFile(file);
+      if (!check.ok) {
+        setError(check.reason);
         return;
       }
       releaseObjectUrl();

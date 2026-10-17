@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   needsReview,
+  routeScan,
   createReviewItem,
   applyReviewDecision,
   computeAccuracy,
@@ -13,6 +14,55 @@ describe('review queue', () => {
     expect(needsReview(70, 70)).toBe(false);
     expect(needsReview(95, 70)).toBe(false);
     expect(DEFAULT_REVIEW_THRESHOLD).toBe(70);
+  });
+
+  it('treats non-finite confidence as needing review, never as a pass', () => {
+    // Regression: `NaN < threshold` is false, which used to silently
+    // auto-accept a corrupt read. Non-finite confidence must route to a human.
+    expect(needsReview(NaN, 70)).toBe(true);
+    expect(needsReview(Infinity, 70)).toBe(true);
+    expect(needsReview(-Infinity, 70)).toBe(true);
+  });
+
+  describe('routeScan — OCR failure / low confidence can never auto-accept', () => {
+    const T = DEFAULT_REVIEW_THRESHOLD;
+
+    it('routes an OCR engine failure to scan-failed, never auto-accept', () => {
+      expect(routeScan({ error: 'OCR engine failed to load', confidence: 99 }, T)).toBe('scan-failed');
+      expect(routeScan({ error: 'Could not decode that image.', confidence: 0 }, T)).toBe('scan-failed');
+    });
+
+    it('routes below-threshold reads to human-review, never auto-accept', () => {
+      expect(routeScan({ error: null, confidence: 0 }, T)).toBe('human-review');
+      expect(routeScan({ error: null, confidence: 69.9 }, T)).toBe('human-review');
+      // Empty read with middling confidence is still a human's call.
+      expect(routeScan({ error: null, confidence: 40 }, T)).toBe('human-review');
+    });
+
+    it('routes non-finite confidence to human-review, never auto-accept', () => {
+      expect(routeScan({ error: null, confidence: NaN }, T)).toBe('human-review');
+      expect(routeScan({ error: null, confidence: Infinity }, T)).toBe('human-review');
+    });
+
+    it('auto-accepts only clean reads at or above the threshold', () => {
+      expect(routeScan({ error: null, confidence: 70 }, T)).toBe('auto-accept');
+      expect(routeScan({ error: null, confidence: 95 }, T)).toBe('auto-accept');
+      expect(routeScan({ error: null, confidence: 100 }, T)).toBe('auto-accept');
+    });
+
+    it('an error beats a high confidence — failure is never overridden', () => {
+      // Even a confident-looking read is failed when the engine reported an error.
+      expect(routeScan({ error: 'worker crashed mid-pass', confidence: 100 }, T)).toBe('scan-failed');
+    });
+
+    it('enumerates every routing outcome — no hidden fourth path', () => {
+      const seen = new Set([
+        routeScan({ error: 'x', confidence: 50 }, T),
+        routeScan({ error: null, confidence: 10 }, T),
+        routeScan({ error: null, confidence: 90 }, T),
+      ]);
+      expect(seen).toEqual(new Set(['scan-failed', 'human-review', 'auto-accept']));
+    });
   });
 
   it('creates pending items seeded with the OCR read', () => {
