@@ -2,7 +2,9 @@
  * Pure verification of a gate scan against the minimal appointment reference.
  *
  * Decision rules (every one test-covered):
- * - cancelled / non-active appointment        → denied
+ * - cancelled appointment                     → denied
+ * - requested (unconfirmed) appointment       → manual-review
+ * - terminal appointment (completed/no-show)  → denied
  * - container or plate mismatch               → denied (identifiers must
  *                                               match exactly — the demo
  *                                               never guesses)
@@ -37,6 +39,10 @@ export const REASON_CODES = {
   LOW_PLATE_CONFIDENCE: 'low-plate-confidence',
   APPOINTMENT_CANCELLED: 'appointment-cancelled',
   APPOINTMENT_NOT_ACTIVE: 'appointment-not-active',
+  /** Appointment exists but was never confirmed — an operator decides. */
+  APPOINTMENT_UNCONFIRMED: 'appointment-unconfirmed',
+  /** Adapter failure: the TAS payload was not a valid contract document. */
+  APPOINTMENT_REF_INVALID: 'appointment-ref-invalid',
   NO_APPOINTMENT_REF: 'no-appointment-ref',
 } as const;
 
@@ -92,8 +98,15 @@ export function verifyGateEventAgainstAppointment(
     reasonCodes.push(REASON_CODES.APPOINTMENT_CANCELLED);
     return { decision: 'denied', reasonCodes };
   }
+  // A "requested" appointment exists but was never confirmed — this is an
+  // operator call, not a denial (the truck may be held at the gate).
+  if (appointmentRef.status === 'requested') {
+    reasonCodes.push(REASON_CODES.APPOINTMENT_UNCONFIRMED);
+    return { decision: 'manual-review', reasonCodes };
+  }
+  // Terminal statuses (completed, no-show) can never clear a scan.
   if (
-    appointmentRef.status !== 'scheduled' &&
+    appointmentRef.status !== 'confirmed' &&
     appointmentRef.status !== 'checked-in'
   ) {
     reasonCodes.push(REASON_CODES.APPOINTMENT_NOT_ACTIVE);

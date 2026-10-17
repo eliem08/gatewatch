@@ -22,13 +22,42 @@ export const GATE_EVENT_CONTRACT_VERSION = '1.0.0' as const;
 /**
  * The MINIMAL appointment shape GateWatch needs from the truck-appointment
  * system (TAS). This shape is DELIBERATELY DUPLICATED here — it does not
- * import anything from TAS, because TAS has no real contract yet in this
- * demo. A separate integration worker reconciles this shape against TAS's
- * real contract; the version constant below is the pinned expectation it
- * must match. If TAS's contract moves, bump this file and re-run the
- * reconciliation instead of silently drifting.
+ * import anything from TAS, because there is no shared backend and no
+ * monorepo. TAS's contract (lib/contracts/appointment.ts, source of truth)
+ * is reconciled against this shape by the integration worker in
+ * src/lib/tas-adapter.ts; the version constant below is the pinned
+ * expectation it must match. If TAS's contract moves, bump this file and
+ * re-run the reconciliation instead of silently drifting.
  */
 export const TAS_APPOINTMENT_CONTRACT_VERSION_EXPECTED = '1.0.0' as const;
+
+/**
+ * TAS's AppointmentStatus enum, duplicated verbatim from TAS's contract.
+ * TAS is the source of truth — kept in sync by the reconciliation above.
+ */
+const TasAppointmentStatusSchema = z.enum([
+  'requested',
+  'confirmed',
+  'checked-in',
+  'completed',
+  'cancelled',
+  'no-show',
+]);
+export { TasAppointmentStatusSchema };
+export type TasAppointmentStatus = z.infer<typeof TasAppointmentStatusSchema>;
+
+/**
+ * ISO 8601 UTC datetime ending in "Z", duplicated verbatim from TAS's
+ * `UtcDatetime` (TAS is the source of truth for the wire format).
+ */
+export const UtcDatetimeSchema = z
+  .string()
+  .refine(
+    (s) =>
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(s) &&
+      !Number.isNaN(Date.parse(s)),
+    { message: "must be an ISO 8601 UTC datetime ending in 'Z'" },
+  );
 
 /**
  * Minimal appointment reference (duplicated minimal TAS shape — see above).
@@ -36,12 +65,12 @@ export const TAS_APPOINTMENT_CONTRACT_VERSION_EXPECTED = '1.0.0' as const;
  */
 export const AppointmentRefSchema = z.object({
   appointmentId: z.string().min(1),
-  status: z.enum(['scheduled', 'checked-in', 'completed', 'cancelled']),
+  status: TasAppointmentStatusSchema,
   containerNumber: z.string().min(1),
   plate: z.string().min(1),
-  slotStartUtc: z.iso.datetime(),
-  slotEndUtc: z.iso.datetime(),
-  gate: z.union([z.string().min(1), z.number()]).transform(String),
+  slotStartUtc: UtcDatetimeSchema,
+  slotEndUtc: UtcDatetimeSchema,
+  gate: z.string().min(1).max(16),
 });
 
 export type AppointmentRef = z.infer<typeof AppointmentRefSchema>;

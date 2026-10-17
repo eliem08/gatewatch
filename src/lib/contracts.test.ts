@@ -139,27 +139,64 @@ describe('AppointmentRefSchema (duplicated minimal TAS shape)', () => {
   it('accepts a complete appointment reference', () => {
     const res = AppointmentRefSchema.safeParse({
       appointmentId: 'slot-1',
-      status: 'scheduled',
+      status: 'confirmed',
       containerNumber: 'MSKU7392017',
       plate: '78452-A-17',
       slotStartUtc: '2026-10-17T09:00:00Z',
       slotEndUtc: '2026-10-17T11:00:00Z',
-      gate: 1,
+      gate: 'gate-1',
     });
     expect(res.success).toBe(true);
   });
 
-  it('rejects unknown statuses and malformed datetimes', () => {
+  it('accepts every TAS status verbatim (TAS is the source of truth)', () => {
+    for (const status of [
+      'requested',
+      'confirmed',
+      'checked-in',
+      'completed',
+      'cancelled',
+      'no-show',
+    ]) {
+      expect(
+        AppointmentRefSchema.safeParse({
+          appointmentId: 'slot-1',
+          status,
+          containerNumber: 'MSKU7392017',
+          plate: '78452-A-17',
+          slotStartUtc: '2026-10-17T09:00:00Z',
+          slotEndUtc: '2026-10-17T11:00:00Z',
+          gate: 'gate-1',
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it('rejects unknown statuses, non-Z datetimes and non-string gates', () => {
+    const base = {
+      appointmentId: 'slot-1',
+      status: 'confirmed',
+      containerNumber: 'MSKU7392017',
+      plate: '78452-A-17',
+      slotStartUtc: '2026-10-17T09:00:00Z',
+      slotEndUtc: '2026-10-17T11:00:00Z',
+      gate: 'gate-1',
+    };
+    expect(
+      AppointmentRefSchema.safeParse({ ...base, status: 'maybe' }).success,
+    ).toBe(false);
+    expect(
+      AppointmentRefSchema.safeParse({ ...base, status: 'scheduled' }).success,
+    ).toBe(false);
+    // TAS's wire format is Z-suffixed UTC only — offsets are rejected.
     expect(
       AppointmentRefSchema.safeParse({
-        appointmentId: 'slot-1',
-        status: 'maybe',
-        containerNumber: 'X',
-        plate: 'Y',
-        slotStartUtc: '2026-10-17T09:00:00Z',
-        slotEndUtc: '2026-10-17T11:00:00Z',
-        gate: 'gate-1',
+        ...base,
+        slotStartUtc: '2026-10-17T09:00:00+00:00',
       }).success,
+    ).toBe(false);
+    expect(
+      AppointmentRefSchema.safeParse({ ...base, gate: 1 }).success,
     ).toBe(false);
   });
 });

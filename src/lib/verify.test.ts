@@ -20,7 +20,7 @@ const baseScan: ScanInput = {
 
 const baseAppointment: AppointmentRef = {
   appointmentId: 'slot-1',
-  status: 'scheduled',
+  status: 'confirmed',
   containerNumber: 'MSKU7392017',
   plate: '78452-A-17',
   slotStartUtc: '2026-10-17T09:00:00Z',
@@ -71,6 +71,15 @@ describe('verifyGateEventAgainstAppointment', () => {
     expect(res.reasonCodes).toContain(REASON_CODES.APPOINTMENT_CANCELLED);
   });
 
+  it('denies a no-show appointment', () => {
+    const res = verifyGateEventAgainstAppointment(baseScan, {
+      ...baseAppointment,
+      status: 'no-show',
+    });
+    expect(res.decision).toBe('denied');
+    expect(res.reasonCodes).toContain(REASON_CODES.APPOINTMENT_NOT_ACTIVE);
+  });
+
   it('denies a completed appointment', () => {
     const res = verifyGateEventAgainstAppointment(baseScan, {
       ...baseAppointment,
@@ -78,6 +87,24 @@ describe('verifyGateEventAgainstAppointment', () => {
     });
     expect(res.decision).toBe('denied');
     expect(res.reasonCodes).toContain(REASON_CODES.APPOINTMENT_NOT_ACTIVE);
+  });
+
+  it('authorizes a checked-in appointment', () => {
+    const res = verifyGateEventAgainstAppointment(baseScan, {
+      ...baseAppointment,
+      status: 'checked-in',
+    });
+    expect(res.decision).toBe('authorized');
+    expect(res.reasonCodes).toContain(REASON_CODES.VERIFIED_MATCH);
+  });
+
+  it('routes a requested (unconfirmed) appointment to manual review', () => {
+    const res = verifyGateEventAgainstAppointment(baseScan, {
+      ...baseAppointment,
+      status: 'requested',
+    });
+    expect(res.decision).toBe('manual-review');
+    expect(res.reasonCodes).toContain(REASON_CODES.APPOINTMENT_UNCONFIRMED);
   });
 
   it('routes low OCR confidence to manual review even when everything matches', () => {
