@@ -32,7 +32,15 @@ import {
   type Lane,
 } from '@/lib/lanes';
 import BatchDropzone, { type PickedFile } from '@/components/BatchDropzone';
+import QuarantineBanner from '@/components/QuarantineBanner';
 import { Eyebrow, SectionTitle, Stat, Card, AmberActionButton, GhostActionButton, Badge } from '@/components/ui';
+import {
+  loadValidatedList,
+  saveValidatedList,
+  getQuarantineRegister,
+  type QuarantinedEntry,
+} from '@/lib/storage';
+import { LegacyGateLogEntrySchema, LegacyReviewItemSchema } from '@/lib/contracts';
 
 // DEMO-ONLY storage: per-browser localStorage, not a shared operational
 // database (see registry.ts). No server, no access control, no audit trail.
@@ -114,28 +122,21 @@ export default function BatchPage() {
   const togglesRef = useRef({ contrast, threshold: thresholdOpt, upscale });
   togglesRef.current = { contrast, threshold: thresholdOpt, upscale };
 
-  // Load persisted review history + log count. Pending reviews whose image
+  const [quarantined, setQuarantined] = useState<QuarantinedEntry[]>([]);
+
+  // Load persisted review history + log count through the validated
+  // storage boundary: corrupted records are quarantined (surfaced below),
+  // never trusted, never crashing the load. Pending reviews whose image
   // was an object URL are dropped — blob URLs do not survive a reload.
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(REVIEW_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const kept = (parsed as ReviewItem[]).filter(
-            (r) => r.status !== 'pending' || !r.imageUrl.startsWith('blob:'),
-          );
-          setReviews(kept);
-        }
-      }
-      const logRaw = window.localStorage.getItem(LOG_KEY);
-      if (logRaw) {
-        const parsed = JSON.parse(logRaw);
-        if (Array.isArray(parsed)) setLoggedCount(parsed.length);
-      }
-    } catch {
-      /* storage unavailable */
-    }
+    const reviewsLoaded = loadValidatedList(REVIEW_KEY, LegacyReviewItemSchema, []);
+    const kept = reviewsLoaded.valid.filter(
+      (r) => r.status !== 'pending' || !r.imageUrl.startsWith('blob:'),
+    );
+    setReviews(kept);
+    const logLoaded = loadValidatedList(LOG_KEY, LegacyGateLogEntrySchema, []);
+    setLoggedCount(logLoaded.valid.length);
+    setQuarantined(getQuarantineRegister());
   }, []);
 
   const persistReviews = useCallback((next: ReviewItem[]) => {
@@ -148,16 +149,13 @@ export default function BatchPage() {
   }, []);
 
   const appendToLog = useCallback((entry: GateEntry) => {
-    try {
-      const raw = window.localStorage.getItem(LOG_KEY);
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      const list = Array.isArray(parsed) ? parsed : [];
-      list.push(entry);
-      window.localStorage.setItem(LOG_KEY, JSON.stringify(list));
-      setLoggedCount(list.length);
-    } catch {
-      /* storage unavailable — demo continues */
-    }
+    // Read through the validated boundary so a corrupted log is
+    // quarantined instead of silently overwritten.
+    const { valid, quarantined } = loadValidatedList(LOG_KEY, LegacyGateLogEntrySchema, []);
+    if (quarantined.length > 0) setQuarantined(getQuarantineRegister());
+    const list = [...valid, entry];
+    saveValidatedList(LOG_KEY, list);
+    setLoggedCount(list.length);
   }, []);
 
   const scanImage = useCallback(async (url: string): Promise<ScanOutcome> => {
@@ -407,6 +405,8 @@ export default function BatchPage() {
             instead of auto-accepting. Everything lands in the gate log.
           </p>
         </section>
+
+        <QuarantineBanner entries={quarantined} />
 
         <section className="space-y-4">
           <SectionTitle>1 · Queue images</SectionTitle>

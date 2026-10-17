@@ -17,6 +17,9 @@ import { matchSlot, type MatchResult } from '@/lib/slots';
 import { DEFAULT_REVIEW_THRESHOLD } from '@/lib/review';
 import { loadSlots } from '@/lib/registry';
 import { makeId, type GateEntry } from '@/lib/gatelog';
+import { userSafeError } from '@/lib/http';
+import { loadValidatedList, saveValidatedList } from '@/lib/storage';
+import { LegacyGateLogEntrySchema } from '@/lib/contracts';
 import UploadZone from '@/components/UploadZone';
 import StepIndicator from '@/components/StepIndicator';
 import { Eyebrow, SectionHeading, AmberButton, GhostButton, AmberActionButton, GhostActionButton, SectionTitle, Stat, Card } from '@/components/ui';
@@ -181,7 +184,8 @@ export default function DemoPage() {
         setPhase(2);
       } catch (e) {
         if (id !== scanIdRef.current) return;
-        setError(e instanceof Error ? e.message : String(e));
+        // User-visible error: never leak stack traces or internals.
+        setError(userSafeError(e, 'The scan failed. Try a different image.'));
         setStatus('Failed');
       }
     },
@@ -270,15 +274,10 @@ export default function DemoPage() {
       processingMs: Math.round(totalMs),
     } as unknown as GateEntry;
 
-    try {
-      const raw = window.localStorage.getItem(LOG_KEY);
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      const list = Array.isArray(parsed) ? parsed : [];
-      list.push(entry);
-      window.localStorage.setItem(LOG_KEY, JSON.stringify(list));
-    } catch {
-      /* storage unavailable — demo continues */
-    }
+    // Append through the validated storage boundary: a corrupted log is
+    // quarantined instead of silently overwritten.
+    const { valid } = loadValidatedList(LOG_KEY, LegacyGateLogEntrySchema, []);
+    saveValidatedList(LOG_KEY, [...valid, entry]);
     setLogged(true);
   }, [verifyResult, imageName, plate, container, iso, totalMs, slotView.gate]);
 

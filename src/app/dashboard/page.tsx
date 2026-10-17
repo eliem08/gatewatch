@@ -6,6 +6,14 @@ import { computeStats, bucketByHour, makeId, GateEntry } from '@/lib/gatelog';
 import { computeAccuracy, type ReviewItem } from '@/lib/review';
 import { gateLogToCsv, downloadCsv } from '@/lib/export';
 import { Eyebrow, SectionHeading, Stat, Badge, Card, AmberButton, GhostButton } from '@/components/ui';
+import QuarantineBanner from '@/components/QuarantineBanner';
+import {
+  loadValidatedList,
+  saveValidatedList,
+  getQuarantineRegister,
+  type QuarantinedEntry,
+} from '@/lib/storage';
+import { LegacyGateLogEntrySchema, LegacyReviewItemSchema } from '@/lib/contracts';
 
 // DEMO-ONLY storage: per-browser localStorage, not a shared operational
 // database (see registry.ts). No server, no access control, no audit trail.
@@ -83,34 +91,22 @@ function PanelTitle({ children }: { children: React.ReactNode }) {
 export default function DashboardPage() {
   const [entries, setEntries] = useState<GateEntry[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [quarantined, setQuarantined] = useState<QuarantinedEntry[]>([]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(LOG_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setEntries(parsed);
-      }
-      const reviewRaw = window.localStorage.getItem(REVIEW_KEY);
-      if (reviewRaw) {
-        const parsed = JSON.parse(reviewRaw);
-        if (Array.isArray(parsed)) setReviews(parsed);
-      }
-    } catch {
-      /* ignore */
-    }
+    // Validated load: corrupted records are quarantined (surfaced below),
+    // never trusted, never crashing the dashboard.
+    const logLoaded = loadValidatedList(LOG_KEY, LegacyGateLogEntrySchema, []);
+    setEntries(logLoaded.valid as GateEntry[]);
+    const reviewLoaded = loadValidatedList(REVIEW_KEY, LegacyReviewItemSchema, []);
+    setReviews(reviewLoaded.valid as ReviewItem[]);
+    setQuarantined(getQuarantineRegister());
   }, []);
 
   const persist = (next: GateEntry[]) => {
     setEntries(next);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(LOG_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-    }
+    saveValidatedList(LOG_KEY, next);
   };
 
   const stats = useMemo(() => computeStats(entries), [entries]);
@@ -196,6 +192,8 @@ export default function DashboardPage() {
             Every cleared truck, timestamped. Stats update live as you log crossings from the demo.
           </p>
         </header>
+
+        <QuarantineBanner entries={quarantined} />
 
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label="Trucks cleared" value={String(stats.total)} />

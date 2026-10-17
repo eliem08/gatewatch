@@ -1,0 +1,137 @@
+/**
+ * Pure verification of a gate scan against the minimal appointment reference.
+ *
+ * Decision rules (every one test-covered):
+ * - cancelled / non-active appointment        → denied
+ * - container or plate mismatch               → denied (identifiers must
+ *                                               match exactly — the demo
+ *                                               never guesses)
+ * - scan outside the slot window              → manual-review
+ * - scan at a different gate                  → manual-review
+ * - OCR confidence below threshold            → manual-review
+ * - no appointment reference supplied         → manual-review
+ * - everything matches                        → authorized
+ *
+ * Normalization mirrors slots.ts (case/space/dash-insensitive) so OCR
+ * quirks like "MSKU 739201 7" still verify against "MSKU739201-7".
+ *
+ * NOTE: an "authorized" decision here is still UI-only — no code path in
+ * this demo opens a gate (see review.ts verdict routing). In production
+ * this decision would feed a server-side authorization service, never a
+ * client-side verdict.
+ */
+
+import {
+  AUTH_CONFIDENCE_THRESHOLD,
+  type AppointmentRef,
+  type VerificationDecision,
+} from './contracts';
+
+export const REASON_CODES = {
+  VERIFIED_MATCH: 'verified-match',
+  CONTAINER_MISMATCH: 'container-mismatch',
+  PLATE_MISMATCH: 'plate-mismatch',
+  OUTSIDE_SLOT_WINDOW: 'outside-slot-window',
+  GATE_MISMATCH: 'gate-mismatch',
+  LOW_CONTAINER_CONFIDENCE: 'low-container-confidence',
+  LOW_PLATE_CONFIDENCE: 'low-plate-confidence',
+  APPOINTMENT_CANCELLED: 'appointment-cancelled',
+  APPOINTMENT_NOT_ACTIVE: 'appointment-not-active',
+  NO_APPOINTMENT_REF: 'no-appointment-ref',
+} as const;
+
+export type ScanInput = {
+  plate: string;
+  containerNumber: string;
+  scannedAtUtc: string;
+  gate: string;
+  containerConfidence: number;
+  plateConfidence: number;
+};
+
+function normalize(value: string): string {
+  return (value ?? '').toUpperCase().replace(/[\s-]/g, '');
+}
+
+/**
+ * Verifies one scanned crossing against one appointment reference.
+ *
+ * @param scanned the scan to verify.
+ * @param appointmentRef the minimal TAS appointment shape, or null when the
+ *   scan carries no appointment reference.
+ * @returns decision + machine-readable reason codes.
+ */
+export function verifyGateEventAgainstAppointment(
+  scanned: ScanInput,
+  appointmentRef: AppointmentRef | null,
+): VerificationDecision {
+  const reasonCodes: string[] = [];
+
+  // Low-confidence OCR can never clear automatically, no matter what else
+  // matches — route to a human (also covers NaN via the < comparison,
+  // but callers should validate confidences against the contract first).
+  if (
+    !Number.isFinite(scanned.containerConfidence) ||
+    scanned.containerConfidence < AUTH_CONFIDENCE_THRESHOLD
+  ) {
+    reasonCodes.push(REASON_CODES.LOW_CONTAINER_CONFIDENCE);
+  }
+  if (
+    !Number.isFinite(scanned.plateConfidence) ||
+    scanned.plateConfidence < AUTH_CONFIDENCE_THRESHOLD
+  ) {
+    reasonCodes.push(REASON_CODES.LOW_PLATE_CONFIDENCE);
+  }
+
+  if (!appointmentRef) {
+    reasonCodes.push(REASON_CODES.NO_APPOINTMENT_REF);
+    return { decision: 'manual-review', reasonCodes };
+  }
+
+  if (appointmentRef.status === 'cancelled') {
+    reasonCodes.push(REASON_CODES.APPOINTMENT_CANCELLED);
+    return { decision: 'denied', reasonCodes };
+  }
+  if (
+    appointmentRef.status !== 'scheduled' &&
+    appointmentRef.status !== 'checked-in'
+  ) {
+    reasonCodes.push(REASON_CODES.APPOINTMENT_NOT_ACTIVE);
+    return { decision: 'denied', reasonCodes };
+  }
+
+  // Hard identifier checks — mismatch denies, it does not defer.
+  if (normalize(scanned.containerNumber) !== normalize(appointmentRef.containerNumber)) {
+    reasonCodes.push(REASON_CODES.CONTAINER_MISMATCH);
+    return { decision: 'denied', reasonCodes };
+  }
+  if (normalize(scanned.plate) !== normalize(appointmentRef.plate)) {
+    reasonCodes.push(REASON_CODES.PLATE_MISMATCH);
+    return { decision: 'denied', reasonCodes };
+  }
+
+  // Gate mismatch defers (a human re-assigns the lane), window mismatch
+  // defers (early/late arrivals are an operator call, not a denial).
+  if (normalize(scanned.gate) !== normalize(String(appointmentRef.gate))) {
+    reasonCodes.push(REASON_CODES.GATE_MISMATCH);
+    return { decision: 'manual-review', reasonCodes };
+  }
+
+  const scannedAt = new Date(scanned.scannedAtUtc);
+  const start = new Date(appointmentRef.slotStartUtc);
+  const end = new Date(appointmentRef.slotEndUtc);
+  if (scannedAt < start || scannedAt > end) {
+    reasonCodes.push(REASON_CODES.OUTSIDE_SLOT_WINDOW);
+    return { decision: 'manual-review', reasonCodes };
+  }
+
+  // Confidence failures already pushed above — anything left here that
+  // matched identifiers, gate and window goes to a human when the read
+  // itself was shaky.
+  if (reasonCodes.length > 0) {
+    return { decision: 'manual-review', reasonCodes };
+  }
+
+  reasonCodes.push(REASON_CODES.VERIFIED_MATCH);
+  return { decision: 'authorized', reasonCodes };
+}

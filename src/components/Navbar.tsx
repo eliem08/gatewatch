@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: "/benchmark", label: "Benchmark" },
   { href: "/methodology", label: "Methodology" },
   { href: "/registry", label: "Registry" },
+  { href: "/console", label: "Security" },
   { href: "/#roi", label: "ROI" },
 ];
 

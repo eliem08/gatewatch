@@ -6,9 +6,12 @@ import { isPlausiblePlate, normalizePlate } from '@/lib/plates';
 import { parseContainer, normalizeContainer } from '@/lib/iso6346';
 import { makeId } from '@/lib/gatelog';
 import { Eyebrow, Card, SectionTitle, GhostActionButton } from '@/components/ui';
+import QuarantineBanner from '@/components/QuarantineBanner';
+import { getQuarantineRegister, type QuarantinedEntry } from '@/lib/storage';
 
 export default function RegistryPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [quarantined, setQuarantined] = useState<QuarantinedEntry[]>([]);
   const [plate, setPlate] = useState('');
   const [container, setContainer] = useState('');
   const [company, setCompany] = useState('');
@@ -21,6 +24,7 @@ export default function RegistryPage() {
 
   useEffect(() => {
     setSlots(loadSlots());
+    setQuarantined(getQuarantineRegister());
   }, []);
 
   function submit(e: React.FormEvent) {
@@ -87,6 +91,8 @@ export default function RegistryPage() {
             Trucks are verified against these slots. Stored in your browser — reset anytime.
           </p>
         </header>
+
+        <QuarantineBanner entries={quarantined} />
 
         <Card>
           <SectionTitle>Add appointment slot</SectionTitle>

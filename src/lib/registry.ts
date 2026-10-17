@@ -13,6 +13,8 @@
  */
 
 import type { Slot } from './slots';
+import { LegacySlotSchema } from './contracts';
+import { loadValidatedList } from './storage';
 
 export type { Slot };
 
@@ -102,22 +104,16 @@ export const SEED_SLOTS: Slot[] = [
 const STORAGE_KEY = 'gatewatch.slots.v1';
 
 /**
- * Loads slots from localStorage or returns seed data.
+ * Loads slots from localStorage, validating every record against the
+ * contract on the way in. Corrupted entries are quarantined (visible via
+ * the quarantine register + UI banner) instead of trusted or crashing.
+ * Falls back to seed data when nothing usable is stored.
  * @returns array of slots.
  */
 export function loadSlots(): Slot[] {
   if (typeof window === 'undefined') return SEED_SLOTS;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return SEED_SLOTS;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed as Slot[];
-    }
-    return SEED_SLOTS;
-  } catch {
-    return SEED_SLOTS;
-  }
+  const { valid } = loadValidatedList(STORAGE_KEY, LegacySlotSchema, []);
+  return valid.length > 0 ? valid : SEED_SLOTS;
 }
 
 /**

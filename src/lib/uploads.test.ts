@@ -52,4 +52,37 @@ describe('upload validation', () => {
       expect(ACCEPTED_IMAGE_TYPES).toContain(t);
     }
   });
+
+  // Phase C regression additions: malformed / adversarial file shapes.
+  it('rejects a whitespace-padded MIME type that is not on the allowlist', () => {
+    const r = validateUploadFile(file({ type: ' image/jpeg ', name: 'spoof.jpg' }));
+    expect(r.ok).toBe(false);
+  });
+
+  it('rejects negative and non-finite sizes', () => {
+    expect(validateUploadFile(file({ size: -5 })).ok).toBe(false);
+    expect(validateUploadFile(file({ size: NaN })).ok).toBe(false);
+    expect(validateUploadFile(file({ size: Infinity })).ok).toBe(false);
+  });
+
+  it('rejects a gigantic claimed size even with a valid MIME type', () => {
+    const r = validateUploadFile(file({ type: 'image/png', size: 4 * 1024 * 1024 * 1024 }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/over the 15 MB limit/);
+  });
+
+  it('rejects objects with non-string type or missing size fields', () => {
+    const weird = { name: 'x.jpg', type: 42, size: 100 } as unknown as {
+      name: string;
+      type: string;
+      size: number;
+    };
+    expect(validateUploadFile(weird).ok).toBe(false);
+    const noSize = { name: 'x.jpg', type: 'image/jpeg' } as unknown as {
+      name: string;
+      type: string;
+      size: number;
+    };
+    expect(validateUploadFile(noSize).ok).toBe(false);
+  });
 });

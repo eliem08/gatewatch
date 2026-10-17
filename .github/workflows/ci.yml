@@ -10,6 +10,14 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
+      # Dependency audit: fail the build on HIGH or CRITICAL advisories.
+      # Threshold choice: `--audit-level=high` fails CI on high+ only.
+      # Moderate/low advisories are reported by the step but do not block,
+      # because this is a client-side demo with no secrets or backend —
+      # a moderate prototype-pollution advisory in a dev-only transitive
+      # dep does not gate a merge, while a high+ advisory (RCE, auth
+      # bypass, credential leak) always does.
+      - run: npm audit --audit-level=high
       - run: npm run typecheck
       - run: npm run lint --if-present
       - run: npm test

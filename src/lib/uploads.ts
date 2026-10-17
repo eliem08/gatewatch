@@ -55,7 +55,7 @@ export function validateUploadFile(file: {
   if (!file || typeof file.size !== 'number' || typeof file.type !== 'string') {
     return { ok: false, reason: 'That file could not be read. Try picking it again.' };
   }
-  if (file.size <= 0) {
+  if (!Number.isFinite(file.size) || file.size <= 0) {
     return { ok: false, reason: `"${file.name || 'file'}" is empty (0 bytes) — nothing to scan.` };
   }
   if (!file.type || !(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
