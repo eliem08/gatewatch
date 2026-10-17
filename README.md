@@ -113,6 +113,59 @@ Degradations are seeded, so runs are reproducible. The benchmark runs single-pas
 
 **Error analysis from human corrections.** Every correction an operator makes in the review queue is aligned (OCR read vs. correction) and appended to a persistent confusion log (`gatewatch.confusion.v1`). The benchmark page aggregates it: most-confused pairs, split by preprocessing on/off, by quality bucket, and by field. This is the ground truth for what the system actually gets wrong in the field — and the input for deciding which preprocessing step or engine earns its keep.
 
+## Validation & real-world readiness (Phase D)
+
+Phase D separates **software correctness** (proven) from **real-world
+accuracy** (unmeasured — no labeled real captures exist). The full
+scorecard is `docs/ACCEPTANCE.md`; the frank gap list is
+`docs/LIMITATIONS.md`; pipeline throughput is `docs/PERFORMANCE.md`.
+
+**Adversarial fuzz — the safety invariant under fire.** 600 hostile
+routing payloads (NaN/±Infinity/negative/>100 confidences, hostile
+error text, sub-threshold reads) through the verdict choke point:
+**0 auto-accepts**. 500 hostile scans (hostile confidences,
+mismatched pairs, unicode confusables, overlong/empty strings)
+against a matching confirmed appointment: **0 authorizations**
+(`src/lib/fuzz-routing.test.ts`, seeded, reproducible).
+
+**Two hardening fixes the fuzz found.** A finite confidence of 101
+sailed through *both* the choke point and the verifier (`101 < 70` is
+false; the OCR wrapper coerces non-finite to 0 but never clamps
+>100) — now out-of-range confidence fails closed to
+human-review/manual-review at both layers, test-locked.
+
+**TAS seam under attack.** 26 malformed payload classes → typed
+issues, manual-review, never authorized, never throws; status-enum
+drift (`CONFIRMED`, `checked_in`, `on-hold`, …) rejected; all 6
+contract statuses map to the documented decision. The **replay
+limitation is documented, not fixed**: a stale well-formed
+`confirmed` payload still authorizes — the adapter validates shape,
+not provenance, and the fix is an authenticated fresh fetch in a
+production seam (`src/lib/tas-adversarial.test.ts`, 58 tests).
+
+**ISO 6346 edge sweep.** The mod-11→10 branch across 25 prefixes;
+~450 transpositions checked against an independent modular oracle
+with exact agreement — pinning the real blind spots: letter pairs
+congruent mod 11 (A=10/K=21/U=32 — including K/U inside MSKU)
+survive transposition/substitution, and the 10→0 mapping lets a
+transposition escape on check-digit-0 numbers. Valid check digit ≠
+identity, empirically (`src/lib/iso6346-edge.test.ts`).
+
+**Throughput (measured, 2 vCPU).** `routeScan` ~396k/s, verifier
+~460k/s, full TAS seam ~3.5k/s (zod-bound, ~0.25 ms/op). The decision
+pipeline is not the bottleneck — OCR is, and live OCR latency is
+**not measured here** (browser Tesseract paths are mock-tested).
+
+**Dataset contract, no dataset.** `src/lib/datasets.ts` (v1.0.0)
+defines what a real validation effort with the terminal operator must
+produce: labeled images, capture conditions, ground-truth annotations,
+bounding boxes, provenance labels. `fixtures/synthetic/` holds
+SYNTHETIC-labeled fixtures for engineering tests only — they prove
+pipeline correctness and say nothing about real-world OCR accuracy.
+
+**Test suite: 289 tests, all green** (`npm test`), plus `tsc`,
+`next lint`, and `next build`.
+
 ## ISO 6346 deep-dive + BIC owner codes
 
 The check digit: letters map to numbers (A=10, B=12, C=13, …, Z=38 — multiples of 11 skipped), each of the first 10 characters is weighted by 2⁰…2⁹, summed, mod 11 (10 → 0). Worked example, `CSQU 305438 3`:
@@ -144,7 +197,7 @@ They're renders, not photos — built for OCR reliability so the demo works on f
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # vitest — 87 tests
+npm test         # vitest — 289 tests
 npm run build    # production build
 ```
 
@@ -184,6 +237,18 @@ src/
     confusion.ts        # review-correction confusion log + aggregation
     owners.ts           # partial BIC owner-code registry
     citations.ts        # verified references
+    tas-adapter.ts      # TAS appointment seam (shape validation, status policy)
+    datasets.ts         # versioned validation-dataset contract (schema only)
+    fuzz-routing.test.ts# Phase D adversarial fuzz: 1100+ hostile payloads
+    tas-adversarial.test.ts # Phase D TAS seam attacks + replay documentation
+    iso6346-edge.test.ts# Phase D check-digit edge sweep vs modular oracle
+    performance.test.ts # Phase D throughput harness (numbers -> docs/PERFORMANCE.md)
+    datasets.test.ts    # Phase D dataset contract + synthetic fixture checks
+  docs/
+    ACCEPTANCE.md       # pilot acceptance criteria: MET / NOT MET / BLOCKED-ON-REAL-DATA
+    LIMITATIONS.md      # known limitations registry with resolving evidence
+    PERFORMANCE.md      # measured throughput numbers + labeled non-measurements
+  fixtures/synthetic/   # SYNTHETIC fixtures for engineering tests only
 ```
 
 ## References
