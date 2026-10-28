@@ -117,3 +117,19 @@ not a measured deployment. Throughput numbers in
 `docs/PERFORMANCE.md` are decision-pipeline-only on a 2-vCPU dev VM;
 they do not include OCR latency, which dominates the real loop and is
 unmeasured here.
+
+
+## Security, dependencies and production readiness (verified 2026-10-28)
+
+**Dependency audit.** `npm audit` reports 0 vulnerabilities (all severities) on the lockfile at the commit that introduced this section. CI runs `npm audit --audit-level=high` as a **blocking** step with **no exceptions**; a second step prints the full report. If an unfixable advisory ever has to be tolerated, it must be listed here with advisory ID, affected environment, mitigation, expiry and follow-up, and gated by ID in CI, not by turning the audit into a warning.
+
+**Not production-ready.** A green CI run is not evidence of production readiness. Missing before any real deployment: real-data validation, a durable shared store, a real identity provider with verified credentials, operational monitoring, backup/recovery, and an authorized staging validation. Nothing in this repository has been connected to a real port, TOS, gate controller or production service.
+
+**Feature status.**
+
+| Feature | Status |
+|---|---|
+| Container/plate validation, OCR confidence thresholds, manual-review flow, TAS seam checks | Implemented and tested (289 tests, including fuzz) against **synthetic** inputs only |
+| Storage | Browser `localStorage` only: no server, no durability, no multi-user consistency |
+| Authentication | `DevMockAuthProvider` is a client-side, library-level mock with no HTTP surface; it trusts whatever role it was constructed with. A real provider is a placeholder. OCR output alone never authorizes entry; a supervisor decision is required to move manual-review to authorized. |
+| Real-world OCR accuracy | **Unmeasured.** Synthetic benchmark images say nothing about real gate accuracy. |
