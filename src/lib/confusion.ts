@@ -5,7 +5,8 @@
  * *which* characters does the system confuse, and does preprocessing
  * change the answer?
  *
- * Storage: a JSON array in localStorage under CONFUSION_KEY. The pure
+ * Storage: a JSON array in the visitor's browser localStorage under
+ * CONFUSION_KEY — DEMO-ONLY, per-browser, no server and no sharing. The pure
  * aggregation functions take records as input so they stay testable.
  */
 import { confusionTable } from './metrics';

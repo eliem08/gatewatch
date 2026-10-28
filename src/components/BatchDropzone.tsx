@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { validateUploadFile } from '@/lib/uploads';
 
 export type PickedFile = {
   name: string;
@@ -36,14 +37,21 @@ export default function BatchDropzone({ files, onChange, disabled }: BatchDropzo
     (incoming: FileList | File[] | null | undefined) => {
       if (!incoming) return;
       const list = Array.from(incoming);
-      const images = list.filter((f) => f.type.startsWith('image/'));
-      if (images.length < list.length) {
-        setError('Non-image files were skipped. Use JPG, PNG, WebP or SVG.');
+      const accepted: File[] = [];
+      const rejected: string[] = [];
+      for (const f of list) {
+        const check = validateUploadFile(f);
+        if (check.ok) accepted.push(f);
+        else rejected.push(check.reason);
+      }
+      if (rejected.length > 0) {
+        // Show the first rejection; the rest are dropped silently.
+        setError(rejected.length > 1 ? `${rejected[0]} (${rejected.length - 1} more skipped)` : rejected[0]);
       } else {
         setError(null);
       }
-      if (images.length === 0) return;
-      const picked: PickedFile[] = images.map((f) => ({
+      if (accepted.length === 0) return;
+      const picked: PickedFile[] = accepted.map((f) => ({
         name: f.name,
         url: URL.createObjectURL(f),
         owned: true,

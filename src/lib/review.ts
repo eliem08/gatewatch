@@ -32,12 +32,54 @@ export const DEFAULT_REVIEW_THRESHOLD = 70;
 
 /**
  * Decides whether a scan needs human review.
+ *
+ * SAFETY: a non-finite confidence (NaN/Infinity — e.g. a corrupt worker
+ * payload) ALWAYS needs review. Without this guard `NaN < threshold` is
+ * false, which would silently auto-accept the read.
+ *
+ * Phase D hardening: the confidence scale is contractually 0–100
+ * (ConfidenceSchema in contracts.ts). A confidence OUTSIDE that range —
+ * negative, or above 100 — is by definition a corrupt/hostile payload and
+ * fails closed to human review. (Before this fix, a finite confidence of
+ * 101 sailed through to auto-accept.)
  * @param confidence OCR confidence 0–100.
  * @param threshold review threshold (exclusive: exactly at threshold passes).
  * @returns true when the scan must go to the review queue.
  */
 export function needsReview(confidence: number, threshold: number): boolean {
+  if (!Number.isFinite(confidence)) return true;
+  if (confidence < 0 || confidence > 100) return true;
   return confidence < threshold;
+}
+
+/**
+ * Verdict routing for a finished scan. This is the single choke point that
+ * decides whether an OCR read may auto-accept or must go to a human.
+ *
+ * SAFETY INVARIANT (locked by tests in review.test.ts): OCR failure or
+ * below-threshold confidence NEVER auto-accepts. The three paths are:
+ * - 'scan-failed'   — the OCR engine threw or the image could not be
+ *                      decoded. The item is marked failed; it is never
+ *                      verified against the slot registry and never logged
+ *                      as an auto-accepted crossing.
+ * - 'human-review'   — confidence below the operator's threshold (or
+ *                      non-finite). An operator approves or corrects the
+ *                      read before anything is verified or logged.
+ * - 'auto-accept'    — confidence at/above the threshold. The read is
+ *                      verified against the slot registry and logged.
+ *
+ * The verdicts themselves are UI-only records — no code path here
+ * opens a gate or authorizes access (see matchSlot in slots.ts).
+ */
+export type ScanRouting = 'auto-accept' | 'human-review' | 'scan-failed';
+
+export function routeScan(
+  scan: { error: string | null; confidence: number },
+  threshold: number,
+): ScanRouting {
+  if (scan.error) return 'scan-failed';
+  if (needsReview(scan.confidence, threshold)) return 'human-review';
+  return 'auto-accept';
 }
 
 let seq = 0;

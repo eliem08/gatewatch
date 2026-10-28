@@ -84,9 +84,9 @@ Everything runs **in the browser** (Tesseract.js, no server GPU, no image upload
 - **`/demo`** — Guided live demo: pick a sample capture (or upload a truck photo) → watch OCR + preprocessing → review extracted plate/container with ISO 6346 validation → verify against the slot registry → log the crossing.
 - **`/batch`** — Batch mode: drop many gate captures at once. Each image is assigned to one of 3 lanes and scanned in queue order; reads below the operator-set confidence threshold go to the human review queue instead of auto-accepting. Verified results land in the gate log in order.
 - **`/dashboard`** — Operations view: gate log, trucks/hour, avg check time, mismatch rate, hourly throughput chart, outcome donut, per-lane throughput, OCR accuracy panel (auto-accept rate, correction rate), and one-click CSV export of the gate log. "Load sample shift" fills a realistic day.
-- **`/benchmark`** — Evaluation harness: 4 labeled samples × 6 degradations (clean, noise, blur, rotation, low contrast, occlusion), scored with CER / WER / field accuracy, plus a confusion matrix of benchmark errors and the error-analysis dashboard built from human corrections.
+- **`/benchmark`** — Evaluation harness: 4 labeled synthetic samples × 6 seeded degradations (clean, noise, blur, rotation, low contrast, occlusion), scored with CER / WER / field accuracy against known ground truth, plus a confusion matrix of benchmark errors and the error-analysis dashboard built from human corrections. Synthetic by design — not real-world accuracy.
 - **`/methodology`** — Research write-up: pipeline diagram, ISO 6346 check-digit math with a worked example, BIC owner-code registry, failure modes, production requirements, honest limits, and verified references.
-- **`/registry`** — Appointment-slot CRUD (plate, container, company, line, gate, time window). Persists in `localStorage`; reset to demo data anytime.
+- **`/registry`** — Appointment-slot CRUD (plate, container, company, line, gate, time window). Persists in the visitor's browser `localStorage` (demo-only — see "Demo storage, not a database" below); reset to demo data anytime.
 
 ## Batch mode, review queue & lanes
 
@@ -112,6 +112,59 @@ Everything runs **in the browser** (Tesseract.js, no server GPU, no image upload
 Degradations are seeded, so runs are reproducible. The benchmark runs single-pass (PSM 6) by default; the ensemble mode runs all 4 PSM passes per case (~4× slower).
 
 **Error analysis from human corrections.** Every correction an operator makes in the review queue is aligned (OCR read vs. correction) and appended to a persistent confusion log (`gatewatch.confusion.v1`). The benchmark page aggregates it: most-confused pairs, split by preprocessing on/off, by quality bucket, and by field. This is the ground truth for what the system actually gets wrong in the field — and the input for deciding which preprocessing step or engine earns its keep.
+
+## Validation & real-world readiness (Phase D)
+
+Phase D separates **software correctness** (proven) from **real-world
+accuracy** (unmeasured — no labeled real captures exist). The full
+scorecard is `docs/ACCEPTANCE.md`; the frank gap list is
+`docs/LIMITATIONS.md`; pipeline throughput is `docs/PERFORMANCE.md`.
+
+**Adversarial fuzz — the safety invariant under fire.** 600 hostile
+routing payloads (NaN/±Infinity/negative/>100 confidences, hostile
+error text, sub-threshold reads) through the verdict choke point:
+**0 auto-accepts**. 500 hostile scans (hostile confidences,
+mismatched pairs, unicode confusables, overlong/empty strings)
+against a matching confirmed appointment: **0 authorizations**
+(`src/lib/fuzz-routing.test.ts`, seeded, reproducible).
+
+**Two hardening fixes the fuzz found.** A finite confidence of 101
+sailed through *both* the choke point and the verifier (`101 < 70` is
+false; the OCR wrapper coerces non-finite to 0 but never clamps
+>100) — now out-of-range confidence fails closed to
+human-review/manual-review at both layers, test-locked.
+
+**TAS seam under attack.** 26 malformed payload classes → typed
+issues, manual-review, never authorized, never throws; status-enum
+drift (`CONFIRMED`, `checked_in`, `on-hold`, …) rejected; all 6
+contract statuses map to the documented decision. The **replay
+limitation is documented, not fixed**: a stale well-formed
+`confirmed` payload still authorizes — the adapter validates shape,
+not provenance, and the fix is an authenticated fresh fetch in a
+production seam (`src/lib/tas-adversarial.test.ts`, 58 tests).
+
+**ISO 6346 edge sweep.** The mod-11→10 branch across 25 prefixes;
+~450 transpositions checked against an independent modular oracle
+with exact agreement — pinning the real blind spots: letter pairs
+congruent mod 11 (A=10/K=21/U=32 — including K/U inside MSKU)
+survive transposition/substitution, and the 10→0 mapping lets a
+transposition escape on check-digit-0 numbers. Valid check digit ≠
+identity, empirically (`src/lib/iso6346-edge.test.ts`).
+
+**Throughput (measured, 2 vCPU).** `routeScan` ~396k/s, verifier
+~460k/s, full TAS seam ~3.5k/s (zod-bound, ~0.25 ms/op). The decision
+pipeline is not the bottleneck — OCR is, and live OCR latency is
+**not measured here** (browser Tesseract paths are mock-tested).
+
+**Dataset contract, no dataset.** `src/lib/datasets.ts` (v1.0.0)
+defines what a real validation effort with the terminal operator must
+produce: labeled images, capture conditions, ground-truth annotations,
+bounding boxes, provenance labels. `fixtures/synthetic/` holds
+SYNTHETIC-labeled fixtures for engineering tests only — they prove
+pipeline correctness and say nothing about real-world OCR accuracy.
+
+**Test suite: 289 tests, all green** (`npm test`), plus `tsc`,
+`next lint`, and `next build`.
 
 ## ISO 6346 deep-dive + BIC owner codes
 
@@ -144,7 +197,7 @@ They're renders, not photos — built for OCR reliability so the demo works on f
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # vitest — 87 tests
+npm test         # vitest — 289 tests
 npm run build    # production build
 ```
 
@@ -184,6 +237,18 @@ src/
     confusion.ts        # review-correction confusion log + aggregation
     owners.ts           # partial BIC owner-code registry
     citations.ts        # verified references
+    tas-adapter.ts      # TAS appointment seam (shape validation, status policy)
+    datasets.ts         # versioned validation-dataset contract (schema only)
+    fuzz-routing.test.ts# Phase D adversarial fuzz: 1100+ hostile payloads
+    tas-adversarial.test.ts # Phase D TAS seam attacks + replay documentation
+    iso6346-edge.test.ts# Phase D check-digit edge sweep vs modular oracle
+    performance.test.ts # Phase D throughput harness (numbers -> docs/PERFORMANCE.md)
+    datasets.test.ts    # Phase D dataset contract + synthetic fixture checks
+  docs/
+    ACCEPTANCE.md       # pilot acceptance criteria: MET / NOT MET / BLOCKED-ON-REAL-DATA
+    LIMITATIONS.md      # known limitations registry with resolving evidence
+    PERFORMANCE.md      # measured throughput numbers + labeled non-measurements
+  fixtures/synthetic/   # SYNTHETIC fixtures for engineering tests only
 ```
 
 ## References
@@ -203,9 +268,10 @@ Every citation was verified to exist before being listed:
 - **Demo-grade OCR.** Tesseract.js is real OCR, but accuracy depends on image quality: sharp, well-lit, front-facing text. Rain, night, skewed angles, and dirty plates degrade it — production deployments pair this pipeline with fixed IR-illuminated gate cameras and a text-detection front end (e.g., YOLO-based region detection) before OCR.
 - **Synthetic benchmark.** The labeled test set is 4 SVG renders, not real photos. Benchmark numbers measure robustness to synthetic degradation, not real-world accuracy. A production sign-off needs hundreds of labeled real gate frames.
 - **Ensemble votes on fields, not aligned strings.** It cannot correct a character every engine misreads the same way (e.g. a badly occluded 0). The check digit and the review queue are the backstop for those cases.
-- **Plates: transliteration, not Arabic script.** The parser covers the Latin-script forms (including 2-letter series, WW temporary plates, and Latin region-code suffixes). Real Moroccan plates carry the region code in Arabic script, which this English-model OCR cannot read — a production reader needs an Arabic-script model or a dedicated plate recognizer.
+- **Plates: Latin script only (see `src/lib/plates.ts` for the precise list).** Supported: the standard series with a Latin series letter (`NNNNN-L-NN`, matching the Latin equivalent on post-2026 dual-script plates and transit paperwork), 1–2 letter series, `WW` temporary plates in both orders, and a demo-only Latin region suffix (`-CAS`, …). Not supported: Arabic-script series letters (the majority of plates on Moroccan roads today — needs an `ara.traineddata` engine), the `MA |` country-code prefix of the 2026 unified plate model, W18 dealer plates, CD diplomatic plates, government `M`/`ج` plates, trailer plates, and pre-2000 formats. Anything unsupported goes to human review; the parser never guesses.
 - **Lanes share one OCR engine.** Batch items serialize through a single in-browser Tesseract worker in queue order; the lane assignment and per-lane stats are real, but the lanes are not truly parallel here. Production lanes each run their own reader.
 - **Review thumbnails are session-bound.** Pending review items whose image was an uploaded file lose their thumbnail after a page reload (browser object URLs don't persist); decided review history and accuracy stats survive. Sample-image reviews keep their thumbnails.
+- **Demo storage, not a database.** The gate-event log (`gatewatch.log.v1`), the human review queue (`gatewatch.review.v1`), the appointment registry (`gatewatch.slots.v1`), and the confusion log all live in the visitor's own browser `localStorage`, seeded with hardcoded demo data. There is no server, no sharing between browsers, lanes, or operators, no access control, and no tamper-evident audit trail — anyone with devtools can read or rewrite every record. Treat every number on the dashboard as a local demo artifact. Production needs a server-side store synced from the terminal operating system (TOS) with an audit trail; no backend is built in this phase by design.
 - **Mock registry.** Slots live in `localStorage`; production syncs with the terminal operating system (TOS).
 - **Estimates, not guarantees.** The 9× figure is arithmetic on 180 s vs 20 s checks, not a measured deployment.
 

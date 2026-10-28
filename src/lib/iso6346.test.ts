@@ -60,4 +60,36 @@ describe('iso6346', () => {
     expect(extractContainerCandidates('TCLU 482913-2 and TCLU4829132')).toEqual(['TCLU4829132']);
     expect(extractContainerCandidates('no numbers here')).toEqual([]);
   });
+
+  it('maps a mod-11 remainder of 10 to check digit 0', () => {
+    // ABCD000009 sums to a multiple-of-11-plus-10, so ISO 6346 maps the
+    // check digit 10 -> 0. Guards the `mod === 10 ? 0` branch.
+    expect(checkDigitFor('ABCD000009')).toBe(0);
+    expect(parseContainer('ABCD000009-0')).toMatchObject({ valid: true });
+    expect(parseContainer('ABCD000009-1')).toMatchObject({ valid: false });
+  });
+
+  it('rejects wrong lengths, bad characters, and truncated numbers', () => {
+    expect(parseContainer('TCLU482913')).toBeNull(); // 10 chars, no check digit
+    expect(parseContainer('TCLU48291322')).toBeNull(); // 12 chars
+    expect(parseContainer('1234482913-2')).toBeNull(); // digits where letters belong
+    expect(parseContainer('TCLU48291A-2')).toBeNull(); // letter in serial
+    expect(parseContainer('TC1U482913-2')).toBeNull(); // digit in owner code
+    expect(isValidContainer('TCLU48291-2')).toBe(false);
+  });
+
+  it('normalizes case and separators before validating', () => {
+    expect(isValidContainer('tclu482913-2')).toBe(true);
+    expect(isValidContainer('TCLU 482913 2')).toBe(true);
+    expect(parseContainer('msku739201-7')).toMatchObject({ valid: true, owner: 'MSKU' });
+  });
+
+  it('a valid check digit means well-formed, not verified identity', () => {
+    // Any 11-char string with a correct check digit parses as valid —
+    // the check digit is a typo trap, not proof the container exists.
+    // ABCD000009-0 is well-formed but belongs to no real registry.
+    expect(isValidContainer('ABCD000009-0')).toBe(true);
+    // Identity is established by matching the appointment registry
+    // (see slots.matchSlot), never by the check digit alone.
+  });
 });
