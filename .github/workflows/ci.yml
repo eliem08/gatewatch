@@ -9,18 +9,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
-      - run: npm ci
-      # Dependency audit: fail the build on HIGH or CRITICAL advisories.
-      # Threshold choice: `--audit-level=high` fails CI on high+ only.
-      # Moderate/low advisories are reported by the step but do not block,
-      # because this is a client-side demo with no secrets or backend —
-      # a moderate prototype-pollution advisory in a dev-only transitive
-      # dep does not gate a merge, while a high+ advisory (RCE, auth
-      # bypass, credential leak) always does.
-      # Audit is informational: upstream advisories must not block validation
-      # of the project's own code. Remediation via Dependabot PRs.
-      - run: npm audit --audit-level=high || echo "::warning::npm audit reported high/critical advisories (non-blocking)"
-      - run: npm run typecheck
-      - run: npm run lint --if-present
-      - run: npm test
-      - run: npm run build
+      - name: Install (clean, lockfile-exact)
+        run: npm ci
+      # Security gate (BLOCKING): any HIGH or CRITICAL advisory in the full
+      # dependency tree (prod + dev tooling) fails CI. There are currently no
+      # exceptions. If an unfixable advisory ever has to be tolerated, scope it
+      # explicitly (advisory ID + reason + expiry) in docs/LIMITATIONS.md and
+      # gate it here by ID; do not turn this step into a warning.
+      - name: Security audit (fails on high/critical)
+        run: npm audit --audit-level=high
+      - name: Audit report (all severities, informational)
+        if: always()
+        run: npm audit || true
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm test
+      - name: Production build
+        run: npm run build
